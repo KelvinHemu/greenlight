@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -37,10 +38,65 @@ func (m *SnippetModel) Insert(title string, content string, expires int) (int, e
 
 // Get This will return a specific snippet based on its ID.
 func (m *SnippetModel) Get(id int) (*Snippet, error) {
-	return nil, nil
+	// Build the query
+	stmt := `SELECT id, title, content, created, expires FROM snippets WHERE expires > UTC_TIMESTAMP() AND id = ?`
+
+	// Execute the query
+	row := m.DB.QueryRow(stmt, id)
+
+	// Initialize a pointer to a new zeroed Snippet struct
+	s := &Snippet{}
+
+	// Scan the query results into the struct
+	err := row.Scan(&s.ID, &s.Title, &s.Content, &s.Created, &s.Expires)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoRecord
+		} else {
+			return nil, err
+		}
+	}
+
+	return s, nil
 }
 
 // GetRecent This will return the 10 most recently created snippets.
 func (m *SnippetModel) GetRecent(limit int) ([]*Snippet, error) {
 	return nil, nil
+}
+
+func (m *SnippetModel) Latest() ([]*Snippet, error) {
+	// SQL statement
+	stmt := `SELECT id, title, content, created, expires FROM snippets
+    WHERE expires > UTC_TIMESTAMP() ORDER BY id DESC LIMIT 10`
+
+	// Execute the query
+	rows, err := m.DB.Query(stmt)
+	if err != nil {
+		return nil, err
+	}
+	// Close the row object before the GetRecent() method returns.
+	defer rows.Close()
+
+	// Initialize an empty slice to hold the snippets
+	snippets := []*Snippet{}
+
+	// Loop through the rows and populate the slice
+	for rows.Next() {
+		s := &Snippet{}
+
+		err := rows.Scan(&s.ID, &s.Title, &s.Content, &s.Created, &s.Expires)
+		if err != nil {
+			return nil, err
+		}
+		snippets = append(snippets, s)
+	}
+
+	// Check for any errors
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Return the slice of snippets
+	return snippets, nil
 }
