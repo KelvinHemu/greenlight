@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"time"
 )
 
 // serverError prints the error and stack trace to the log and sends a 500 Internal Server Error response.
@@ -24,4 +25,10 @@ func (app *application) clientError(w http.ResponseWriter, status int) {
 // notFound sends a 404 Not Found response.
 func (app *application) notFound(w http.ResponseWriter) {
 	app.clientError(w, http.StatusNotFound)
+}
+
+func (app *application) newTemplateData(r *http.Request) *templateData {
+	return &templateData{
+		CurrentYear: time.Now().Year(),
+	}
 }
