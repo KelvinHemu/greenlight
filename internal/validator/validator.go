@@ -2,73 +2,62 @@ package validator
 
 import (
 	"regexp"
-	"strings"
-	"unicode/utf8"
 )
 
-// Validator Defines a new Validator type which contains a map of validation errors for our
-// form fields.
+var (
+	EmailRX = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+)
+
+// Validator Define a new Validator type which contains a map of validation errors.
 type Validator struct {
-	FieldErrors    map[string]string
-	NonFieldErrors []string
+	Errors map[string]string
 }
 
-var EmailRX = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+// New is a helper which creates a new Validator instance with an empty errors map.
+func New() *Validator {
+	return &Validator{Errors: make(map[string]string)}
+}
 
-// Valid Valid() returns true if the FieldErrors map doesn't contain any entries.
+// Valid returns true if the errors map doesn't contain any entries.
 func (v *Validator) Valid() bool {
-	return len(v.FieldErrors) == 0 && len(v.NonFieldErrors) == 0
+	return len(v.Errors) == 0
 }
 
-func (v *Validator) AddNonFieldError(message string) {
-	v.NonFieldErrors = append(v.NonFieldErrors, message)
-}
-
-// AddFieldError AddFieldError() adds an error message to the FieldErrors map (so long as no
-// entry already exists for the given key).
-func (v *Validator) AddFieldError(key, message string) {
-	// Note: We need to initialize the map first if it isn't already
-	// initialized.
-	if v.FieldErrors == nil {
-		v.FieldErrors = make(map[string]string)
-	}
-	if _, exists := v.FieldErrors[key]; !exists {
-		v.FieldErrors[key] = message
+// AddError adds an error message to the map (so long as no entry already exists for
+// the given key).
+func (v *Validator) AddError(key, message string) {
+	if _, exists := v.Errors[key]; !exists {
+		v.Errors[key] = message
 	}
 }
 
-// CheckField CheckField() adds an error message to the FieldErrors map only if a
-// validation check is not 'ok'.
-func (v *Validator) CheckField(ok bool, key, message string) {
+// Check adds an error message to the map only if a validation check is not 'ok'.
+func (v *Validator) Check(ok bool, key, message string) {
 	if !ok {
-		v.AddFieldError(key, message)
+		v.AddError(key, message)
 	}
 }
 
-// NotBlank NotBlank() returns true if a value is not an empty string.
-func NotBlank(value string) bool {
-	return strings.TrimSpace(value) != ""
-}
-
-// MaxChars MaxChars() returns true if a value contains no more than n characters.
-func MaxChars(value string, n int) bool {
-	return utf8.RuneCountInString(value) <= n
-}
-
-// PermittedInt PermittedInt() returns true if a value is in a list of permitted integers.
-func PermittedInt(value int, permittedValues ...int) bool {
-	for i := range permittedValues {
-		if value == permittedValues[i] {
+// In returns true if a specific value is in a list of strings.
+func In(value string, list ...string) bool {
+	for i := range list {
+		if value == list[i] {
 			return true
 		}
 	}
 	return false
 }
 
-func MinChars(value string, n int) bool {
-	return utf8.RuneCountInString(value) >= n
+// Matches returns true if a string value matches a specific regexp pattern.
+func Matches(value string, rx *regexp.Regexp) bool {
+	return rx.MatchString(value)
 }
 
-func Matches(value string, regex *regexp.Regexp) bool {
-	return regex.MatchString(value)
+// Unique returns true if all string values in a slice are unique.
+func Unique(values []string) bool {
+	uniqueValues := make(map[string]bool)
+	for _, value := range values {
+		uniqueValues[value] = true
+	}
+	return len(values) == len(uniqueValues)
 }
