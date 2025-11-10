@@ -20,7 +20,7 @@ func (app *application) serve() error {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	shutdownError := make(chan error)
+	shutdownError := make(chan error, 1)
 
 	// catch SIGINT and SIGTERM signals
 	go func() {
@@ -41,7 +41,19 @@ func (app *application) serve() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		shutdownError <- srv.Shutdown(ctx)
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			shutdownError <- err
+			return
+		}
+
+		// wait for all background tasks to complete
+		app.logger.PrintInfo("completing background tasks", map[string]string{
+			"addr": srv.Addr,
+		})
+
+		app.wg.Wait()
+		shutdownError <- nil
 	}()
 
 	// start the server
@@ -51,6 +63,11 @@ func (app *application) serve() error {
 	})
 	err := srv.ListenAndServe()
 	if !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	// Server is shutting down; wait for graceful shutdown to complete
+	if err := <-shutdownError; err != nil {
 		return err
 	}
 
