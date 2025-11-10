@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"greenlight.chriss875.net/internal/validator"
 )
+
+var AnonymousUser = &User{}
 
 type User struct {
 	ID        int64     `json:"id"`
@@ -33,6 +36,11 @@ type UserModel struct {
 	DB *sql.DB
 }
 
+// IsAnonymous Check if the user is anonymous
+func (u *User) IsAnonymous() bool {
+	return u == AnonymousUser
+}
+
 // Set updates the plaintext and hashed representations of the password using the provided plaintext password.
 func (p *password) Set(plaintextPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
@@ -47,7 +55,7 @@ func (p *password) Set(plaintextPassword string) error {
 }
 
 // Matches returns true if the provided plaintext password matches the stored hash.
-func (p *password) matches(plaintextPassword string) (bool, error) {
+func (p *password) Matches(plaintextPassword string) (bool, error) {
 	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintextPassword))
 	if err != nil {
 		switch {
@@ -180,4 +188,43 @@ func (m UserModel) Update(user *User) error {
 	}
 
 	return nil
+}
+
+func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
+	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+
+	query := `
+        SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
+        FROM users
+        INNER JOIN tokens
+        ON users.id = tokens.user_id
+        WHERE tokens.hash = $1
+        AND tokens.scope = $2 
+        AND tokens.expiry > $3`
+
+	args := []interface{}{tokenHash[:], tokenScope, time.Now()}
+
+	var user User
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password.hash,
+		&user.Activated,
+		&user.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }

@@ -12,15 +12,16 @@ import (
 )
 
 const (
-	ScopeActivation = "activation"
+	ScopeActivation     = "activation"
+	ScopeAuthentication = "authentication"
 )
 
 type Token struct {
-	Plaintext string
-	Hash      []byte
-	UserID    int64
-	Expiry    time.Time
-	Scope     string
+	Plaintext string    `json:"token"`
+	Hash      []byte    `json:"-"`
+	UserID    int64     `json:"-"`
+	Expiry    time.Time `json:"expiry"`
+	Scope     string    `json:"-"`
 }
 
 // generateToken creates a new Token with a unique plaintext, SHA256 hash, user ID, expiry time, and scope.
